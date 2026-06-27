@@ -25,7 +25,31 @@
          <lastmod>2026-06-27</lastmod>
     </url>
     <url>
+         <loc>https://plexusone.github.io/agentauth/client/consent-flow/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/client/getting-started/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/client/token-exchange/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
          <loc>https://plexusone.github.io/agentauth/identity/overview/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/orchestration/hybrid/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/orchestration/policy/</loc>
+         <lastmod>2026-06-27</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/orchestration/verifier/</loc>
          <lastmod>2026-06-27</lastmod>
     </url>
     <url>
