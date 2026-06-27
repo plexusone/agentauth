@@ -43,6 +43,7 @@ type Storer interface {
 	CreateToken(ctx context.Context, token *Token) error
 	GetToken(ctx context.Context, id string) (*Token, error)
 	RevokeToken(ctx context.Context, id string) error
+	ListTokens(ctx context.Context) ([]*Token, error)
 
 	// Pre-authorization operations
 	CreatePreAuthorization(ctx context.Context, preAuth *PreAuthorization) error
@@ -51,6 +52,7 @@ type Storer interface {
 
 	// Scope policy operations
 	CreateScopePolicy(ctx context.Context, policy *ScopePolicy) error
+	GetScopePolicy(ctx context.Context, id string) (*ScopePolicy, error)
 	ListScopePolicies(ctx context.Context) ([]*ScopePolicy, error)
 	DeleteScopePolicy(ctx context.Context, id string) error
 }

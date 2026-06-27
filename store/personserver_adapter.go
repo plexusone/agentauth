@@ -7,16 +7,17 @@ import (
 	"github.com/aistandardsio/agent-protocols/aauth/personserver"
 )
 
-// PersonServerAdapter adapts SQLiteStore to the personserver.Store interface.
+// PersonServerAdapter adapts a Storer implementation to the personserver.Store interface.
+// This allows using SQLiteStore, DynamoDBStore, or any other Storer with the personserver package.
 type PersonServerAdapter struct {
-	store *SQLiteStore
+	store Storer
 }
 
 // Verify PersonServerAdapter implements personserver.Store at compile time.
 var _ personserver.Store = (*PersonServerAdapter)(nil)
 
-// NewPersonServerAdapter creates a new adapter for the given SQLite store.
-func NewPersonServerAdapter(store *SQLiteStore) *PersonServerAdapter {
+// NewPersonServerAdapter creates a new adapter for the given store.
+func NewPersonServerAdapter(store Storer) *PersonServerAdapter {
 	return &PersonServerAdapter{store: store}
 }
 

@@ -27,7 +27,7 @@ func NewSQLite(dbPath string) (*SQLiteStore, error) {
 
 	store := &SQLiteStore{db: db}
 	if err := store.migrate(); err != nil {
-		db.Close()
+		_ = db.Close() // Ignore close error; returning migration error
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -204,7 +204,7 @@ func (s *SQLiteStore) ListUsers(ctx context.Context) ([]*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck //nolint:errcheck
 
 	var users []*User
 	for rows.Next() {
@@ -260,7 +260,7 @@ func (s *SQLiteStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck //nolint:errcheck
 
 	var agents []*Agent
 	for rows.Next() {
@@ -395,7 +395,7 @@ func (s *SQLiteStore) ListPendingMissions(ctx context.Context) ([]*Mission, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck //nolint:errcheck
 
 	return scanMissions(rows)
 }
@@ -410,7 +410,7 @@ func (s *SQLiteStore) ListMissionsByUser(ctx context.Context, userID string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return scanMissions(rows)
 }
@@ -522,6 +522,40 @@ func (s *SQLiteStore) RevokeToken(ctx context.Context, id string) error {
 	return nil
 }
 
+// ListTokens returns all tokens.
+func (s *SQLiteStore) ListTokens(ctx context.Context) ([]*Token, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, mission_id, agent_id, user_id, scopes, token_type, protocol, issued_at, expires_at, revoked_at
+		FROM tokens ORDER BY issued_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var tokens []*Token
+	for rows.Next() {
+		var token Token
+		var revokedAt sql.NullTime
+		var missionID sql.NullString
+
+		if err := rows.Scan(&token.ID, &missionID, &token.AgentID, &token.UserID, &token.Scopes,
+			&token.TokenType, &token.Protocol, &token.IssuedAt, &token.ExpiresAt, &revokedAt); err != nil {
+			return nil, err
+		}
+
+		if missionID.Valid {
+			token.MissionID = missionID.String
+		}
+		if revokedAt.Valid {
+			token.RevokedAt = &revokedAt.Time
+		}
+		tokens = append(tokens, &token)
+	}
+
+	return tokens, rows.Err()
+}
+
 // CreatePreAuthorization creates a pre-authorization.
 func (s *SQLiteStore) CreatePreAuthorization(ctx context.Context, preAuth *PreAuthorization) error {
 	if preAuth.ID == "" {
@@ -593,7 +627,7 @@ func (s *SQLiteStore) ListScopePolicies(ctx context.Context) ([]*ScopePolicy, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var policies []*ScopePolicy
 	for rows.Next() {
@@ -611,6 +645,33 @@ func (s *SQLiteStore) ListScopePolicies(ctx context.Context) ([]*ScopePolicy, er
 		policies = append(policies, &policy)
 	}
 	return policies, rows.Err()
+}
+
+// GetScopePolicy retrieves a scope policy by ID.
+func (s *SQLiteStore) GetScopePolicy(ctx context.Context, id string) (*ScopePolicy, error) {
+	var policy ScopePolicy
+	var interactionType, description sql.NullString
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, pattern, protocol, interaction_type, description, priority, created_at
+		FROM scope_policies WHERE id = ?
+	`, id).Scan(&policy.ID, &policy.Pattern, &policy.Protocol, &interactionType, &description, &policy.Priority, &policy.CreatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if interactionType.Valid {
+		policy.InteractionType = interactionType.String
+	}
+	if description.Valid {
+		policy.Description = description.String
+	}
+
+	return &policy, nil
 }
 
 // DeleteScopePolicy deletes a scope policy.
