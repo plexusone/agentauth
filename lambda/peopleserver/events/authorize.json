@@ -1,0 +1,30 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /aauth/authorize",
+  "rawPath": "/aauth/authorize",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "host": "localhost:8888"
+  },
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "api-id",
+    "domainName": "localhost",
+    "domainPrefix": "localhost",
+    "http": {
+      "method": "POST",
+      "path": "/aauth/authorize",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "curl/7.79.1"
+    },
+    "requestId": "id",
+    "routeKey": "POST /aauth/authorize",
+    "stage": "local",
+    "time": "01/Jan/2024:00:00:00 +0000",
+    "timeEpoch": 1704067200000
+  },
+  "body": "{\"agent_token\":\"demo-agent\",\"user_id\":\"demo-user\",\"scope\":\"read:chat\",\"mission_name\":\"Chat Session\"}",
+  "isBase64Encoded": false
+}

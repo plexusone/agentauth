@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AIStandardsIO PeopleServer - AAuth Person Server for agent authorization
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
+
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name (optional, e.g., auth.example.com)
+
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate ARN for custom domain (required if DomainName is set)
+
+Resources:
+  # Lambda Function
+  PeopleServerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: !Sub peopleserver-${Environment}
+      CodeUri: .
+      Handler: bootstrap
+      Description: AAuth Person Server for agent authorization
+      Environment:
+        Variables:
+          PEOPLESERVER_ISSUER: !If
+            - HasCustomDomain
+            - !Sub https://${DomainName}
+            - !Sub https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+          PEOPLESERVER_TABLE_PREFIX: !Sub peopleserver-${Environment}
+          SEED_DEMO_DATA: 'true'
+          USE_DYNAMODB: 'false'  # Set to 'true' when DynamoDB store is implemented
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AgentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MissionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TokensTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PoliciesTable
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerlessHttpApi
+            Path: /{proxy+}
+            Method: ANY
+        WellKnown:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerlessHttpApi
+            Path: /.well-known/{proxy+}
+            Method: GET
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerlessHttpApi
+            Path: /health
+            Method: GET
+
+  # HTTP API Gateway
+  ServerlessHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+
+  # Custom Domain (optional)
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+          EndpointType: REGIONAL
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    DependsOn: ApiDomainName
+    Properties:
+      ApiId: !Ref ServerlessHttpApi
+      DomainName: !Ref DomainName
+      Stage: !Ref Environment
+
+  # DynamoDB Tables (for future use)
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub peopleserver-${Environment}-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  AgentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub peopleserver-${Environment}-agents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  MissionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub peopleserver-${Environment}-missions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-status-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  TokensTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub peopleserver-${Environment}-tokens
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  PoliciesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub peopleserver-${Environment}-policies
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: priority
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: priority-index
+          KeySchema:
+            - AttributeName: priority
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+
+  CustomDomainEndpoint:
+    Condition: HasCustomDomain
+    Description: Custom domain endpoint
+    Value: !Sub https://${DomainName}
+
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt PeopleServerFunction.Arn
+
+  UsersTableName:
+    Description: DynamoDB Users table name
+    Value: !Ref UsersTable
+
+  AgentsTableName:
+    Description: DynamoDB Agents table name
+    Value: !Ref AgentsTable
+
+  MissionsTableName:
+    Description: DynamoDB Missions table name
+    Value: !Ref MissionsTable
+
+  TokensTableName:
+    Description: DynamoDB Tokens table name
+    Value: !Ref TokensTable
+
+  PoliciesTableName:
+    Description: DynamoDB Policies table name
+    Value: !Ref PoliciesTable
