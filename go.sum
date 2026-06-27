@@ -1,5 +1,3 @@
-github.com/aistandardsio/agent-protocols v0.6.0 h1:ovLzXDFIy4UWsizdYqhgY+mfghZFZC5wl8ByTK97NmI=
-github.com/aistandardsio/agent-protocols v0.6.0/go.mod h1:H4I+f+EdiHi+hUR0/93Prgg7/329H/NDLiKLlAzyb+A=
 github.com/aws/aws-lambda-go v1.54.0 h1:EGYpdyRGF88xszqlGcBewz811mJeRS+maNlLZXFheII=
 github.com/aws/aws-lambda-go v1.54.0/go.mod h1:dpMpZgvWx5vuQJfBt0zqBha60q7Dd7RfgJv23DymV8A=
 github.com/aws/aws-sdk-go-v2 v1.42.0 h1:XvXMJTkFQtpBKIWZnmr9ZEOc2InWM2yldjXEJ/bymhA=
