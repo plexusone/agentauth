@@ -1,0 +1,33 @@
+# MkDocs build output
+site/
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+agentauth-server
+peopleserver
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local development
+*.db
+*.sqlite
+*.sqlite3
