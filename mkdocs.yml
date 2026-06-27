@@ -64,6 +64,14 @@ nav:
     - Deployment: agentauth/deployment.md
     - Integration: agentauth/integration.md
     - API Reference: agentauth/api-reference.md
+  - Orchestration:
+    - Token Verification: orchestration/verifier.md
+    - Hybrid Provider: orchestration/hybrid.md
+    - Policy Matching: orchestration/policy.md
+  - Client SDK:
+    - Getting Started: client/getting-started.md
+    - Token Exchange: client/token-exchange.md
+    - Consent Flow: client/consent-flow.md
   - Identity:
     - Layered Identity: identity/overview.md
   - Storage:
