@@ -139,6 +139,110 @@ mission := &store.Mission{
 err = db.CreateMission(ctx, mission)
 ```
 
+### Token Verification (Server-Side)
+
+The `TokenVerifier` provides multi-protocol token verification with action-based routing:
+
+```go
+import "github.com/plexusone/agentauth"
+
+// Configure token verification
+config := &agentauth.VerifierConfig{
+    IDJAGEnabled: true,
+    AAuthEnabled: true,
+    IDJAGIssuers: map[string]string{
+        "https://issuer.example.com": "", // Auto-discovers JWKS
+    },
+    AAuthIssuers: map[string]string{
+        "https://consent.example.com": "",
+    },
+    SensitiveActions: []string{"write", "delete", "admin"},
+}
+
+verifier := agentauth.NewTokenVerifier(config)
+
+// Verify token (tries both protocols)
+claims, err := verifier.Verify(ctx, token)
+
+// Verify with action checking (requires AAuth for sensitive actions)
+claims, err := verifier.VerifyForAction(ctx, token, "delete:resource")
+if err != nil {
+    // Returns error if action requires AAuth but token is ID-JAG
+}
+```
+
+### Hybrid Provider (Protocol Routing)
+
+The `HybridProvider` routes authorization requests to ID-JAG or AAuth based on policies:
+
+```go
+import "github.com/plexusone/agentauth"
+
+// Configure hybrid provider
+config := &agentauth.Config{
+    Policy: &agentauth.PolicyConfig{
+        Default:   agentauth.ProtocolIDJAG, // Use ID-JAG by default
+        Sensitive: agentauth.ProtocolAAuth, // Require AAuth for sensitive scopes
+        Rules: map[string]agentauth.Protocol{
+            "admin:*":  agentauth.ProtocolAAuth,
+            "write:*":  agentauth.ProtocolAAuth,
+            "read:*":   agentauth.ProtocolIDJAG,
+        },
+    },
+}
+
+provider, err := agentauth.NewHybridProvider(config,
+    agentauth.WithIDJAGProvider(idjagProvider),
+    agentauth.WithAAuthProvider(aauthProvider),
+)
+
+// Authorization is routed based on scopes
+result, err := provider.Authorize(ctx, &agentauth.AuthRequest{
+    Resource: "https://api.example.com",
+    Scopes:   []string{"read:email"},  // Routes to ID-JAG
+})
+
+result, err := provider.Authorize(ctx, &agentauth.AuthRequest{
+    Resource: "https://api.example.com",
+    Scopes:   []string{"write:profile"},  // Routes to AAuth (requires consent)
+})
+```
+
+### Agent SDK Client
+
+The `client` package provides an SDK for agents to authenticate:
+
+```go
+import "github.com/plexusone/agentauth/client"
+
+// Create client
+c := client.New("https://authz.example.com",
+    client.WithPollTimeout(5 * time.Minute),
+)
+
+// ID-JAG token exchange (RFC 8693 - automated)
+token, err := c.ExchangeIDJAG(ctx, idjagAssertion, "read:email read:profile")
+
+// JWT bearer grant (RFC 7523)
+token, err := c.ExchangeJWTBearer(ctx, jwtAssertion, "read:data")
+
+// AAuth flow (human consent required)
+result, err := c.RequestAuthorization(ctx, &client.AuthorizationRequest{
+    AgentToken:  agentToken,
+    UserID:      "user-123",
+    Scopes:      "write:profile",
+    MissionName: "Update User Profile",
+})
+
+if result.Status == "pending" {
+    // Direct user to result.ConsentURI for approval
+    fmt.Println("Please approve at:", result.ConsentURI)
+
+    // Wait for consent (blocks until approved/denied/timeout)
+    token, err := c.WaitForConsent(ctx, result.StatusURI)
+}
+```
+
 ## Package Structure
 
 ```
@@ -150,8 +254,13 @@ plexusone/agentauth/
 │   ├── interface.go   # Storer interface
 │   ├── types.go       # User, Agent, Mission, Token, etc.
 │   └── sqlite.go      # SQLite implementation
-├── personserver/      # AAuth Person Server (TODO)
-├── authzserver/       # ID-JAG Authorization Server (TODO)
+├── client/            # Agent SDK for authentication
+│   └── client.go      # Token exchange, consent flow
+├── verifier.go        # Multi-protocol token verifier
+├── hybrid.go          # HybridProvider for protocol routing
+├── policy.go          # PolicyMatcher for scope-based routing
+├── cmd/               # Server binaries
+├── lambda/            # AWS Lambda handlers
 └── docs/
     └── specs/
         └── ROADMAP.md # Implementation roadmap
