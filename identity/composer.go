@@ -177,7 +177,7 @@ func (c *Composer) Verify(ctx context.Context, identity *ComposedIdentity) error
 }
 
 // calculateExpiration finds the earliest expiration among components.
-func (c *Composer) calculateExpiration(composed *ComposedIdentity) time.Time {
+func (c *Composer) calculateExpiration(_ *ComposedIdentity) time.Time {
 	// Default to 1 hour from now
 	expiry := time.Now().Add(time.Hour)
 
