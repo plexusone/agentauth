@@ -18,24 +18,24 @@ These protocols operate at **different layers** and should be **composed**, not 
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Human Identity                            │
+│                        Human Identity                           │
 │  OIDC / SAML / Enterprise IdP                                   │
 │  ID-JAG (delegated user identity for cross-app access)          │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Agent Identity                            │
-│  AAuth Protocol                                                  │
-│  agent_id, mission_id, delegation, subagents                     │
+│                        Agent Identity                           │
+│  AAuth Protocol                                                 │
+│  agent_id, mission_id, delegation, subagents                    │
 │  HTTP Message Signatures, Proof-of-Possession                   │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Workload Identity                           │
-│  SPIFFE/SPIRE, mTLS                                              │
-│  spiffe://domain/path                                            │
+│                      Workload Identity                          │
+│  SPIFFE/SPIRE, mTLS                                             │
+│  spiffe://domain/path                                           │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
