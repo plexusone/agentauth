@@ -6,8 +6,9 @@ repo_name: plexusone/agentauth
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
-    # Dark mode first
+    # Dark mode first (PlexusOne default)
     - scheme: slate
       primary: custom
       accent: custom
@@ -30,7 +31,7 @@ theme:
     - content.tabs.link
 
 extra_css:
-  - https://aistandards.io/css/aistandardsio-mkdocs.css
+  - https://plexusone.dev/css/plexusone-mkdocs.css
 
 markdown_extensions:
   - pymdownx.highlight:
