@@ -674,6 +674,83 @@ require (
 
 ---
 
+## Phase 6: Testing, Quality & OAIAF Implementation
+
+### 6.1 Testing & Quality
+
+Comprehensive testing and quality improvements across all repositories.
+
+#### Testing Tasks
+
+| Task | Repository | Status | Description |
+|------|------------|--------|-------------|
+| Add tests for `aauth/personserver` | agent-protocols | **Complete** | Unit tests for Person Server handlers (38 tests) |
+| Add tests for `store` adapters | plexusone/agentauth | **Complete** | Tests for PersonServerAdapter, AuthzServerAdapter (22 tests) |
+| Add DynamoDB integration tests | plexusone/agentauth | Pending | Tests with DynamoDB Local |
+
+#### Code Quality Tasks
+
+| Task | Repository | Status | Description |
+|------|------------|--------|-------------|
+| Run golangci-lint | agent-protocols | **Complete** | Fixed gofmt/unparam; gosec warnings are OAuth false positives |
+| Run golangci-lint | plexusone/agentauth | **Complete** | Fixed errcheck issues (0 issues now) |
+| Run golangci-lint | oaiaf | **Complete** | 0 issues |
+
+### 6.2 OAIAF Development
+
+Full implementation of the OAIAF agent framework.
+
+#### Core Implementation
+
+| Task | Status | Description |
+|------|--------|-------------|
+| Implement token acquisition | **Complete** | Real token acquisition using agent-protocols |
+| Add ID-JAG provider | **Complete** | Protocol-specific provider for ID-JAG (17 tests) |
+| Add AAuth provider | **Complete** | Protocol-specific provider for AAuth with consent flow |
+| Add AIMS provider | **Complete** | SPIFFE-based provider with mTLS support |
+| Add provider selection | **Complete** | Automatic protocol selection based on configured protocol |
+
+#### Examples & Documentation
+
+| Task | Status | Description |
+|------|--------|-------------|
+| Create basic usage example | **Complete** | examples/basic - ID-JAG authorized requests |
+| Create multi-protocol example | **Complete** | examples/multiprotocol - Protocol switching demo |
+| Create consent flow example | **Complete** | examples/consent - Human-in-the-loop flow |
+| Add API reference docs | **Complete** | README updated with API reference |
+
+### 6.3 Infrastructure & CI/CD
+
+Production infrastructure and continuous integration setup.
+
+#### CI/CD Tasks
+
+| Task | Repository | Status | Description |
+|------|------------|--------|-------------|
+| Set up GitHub Actions | agent-protocols | **Complete** | Build, test, lint with Go 1.22/1.23 |
+| Set up GitHub Actions | plexusone/agentauth | **Complete** | Build, test, lint with Go 1.22/1.23 |
+| Set up GitHub Actions | oaiaf | **Complete** | Build, test, lint with Go 1.22/1.23 |
+
+#### Release Tasks
+
+| Task | Repository | Status | Description |
+|------|------------|--------|-------------|
+| Create release tags | agent-protocols | Pending | Tag v0.6.0 with interface-based packages |
+| Create release tags | plexusone/agentauth | Pending | Tag v0.1.0 initial release |
+| Create release tags | oaiaf | Pending | Tag v0.1.0 initial release |
+
+### 6.4 Documentation
+
+Additional documentation and migration guides.
+
+| Task | Repository | Status | Description |
+|------|------------|--------|-------------|
+| API reference for interface packages | agent-protocols | Pending | Document aauth/personserver and idjag/authzserver |
+| Migration guide | agent-protocols | Pending | Guide from old to new packages |
+| Integration guide | plexusone/agentauth | Pending | How to integrate with existing apps |
+
+---
+
 ## Open Questions
 
 1. Should `bridge/` stay in agent-protocols or move to oaiaf?
