@@ -3,7 +3,7 @@ module github.com/plexusone/agentauth
 go 1.26.0
 
 require (
-	github.com/aistandardsio/agent-protocols v0.6.0
+	github.com/aistandardsio/agent-protocols v0.6.1
 	github.com/aws/aws-lambda-go v1.54.0
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
@@ -31,6 +31,3 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.3 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 )
-
-// Use local agent-protocols until v0.6.0 is tagged
-replace github.com/aistandardsio/agent-protocols => ../../aistandardsio/agent-protocols
