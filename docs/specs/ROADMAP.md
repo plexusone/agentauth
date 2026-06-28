@@ -8,17 +8,34 @@ This document outlines the comprehensive plan for restructuring agent authentica
 |---------|--------|-------|
 | **v0.1.0** | Released | Initial release with PersonServer + AuthzServer |
 | **v0.2.0** | Released | Orchestration layer moved from agent-protocols, storage adapters |
-| **v0.3.0** | **Planned** | Unified SDK: `client/`, `server/`, `verifier/` packages + Agent Provider role |
-| v0.4.0 | Future | Production hardening, Ent ORM, advanced policy engine |
+| **v0.3.0** | **In Progress** | Unified SDK: `client/`, `server/`, `verifier/` packages + Agent Provider role |
+| **v0.4.0** | Planned | Enterprise server: SCIM, Cedar/AuthZEN policy, Audit service |
+| v0.5.0 | Future | Production hardening, Ent ORM, OpenFGA integration |
 
-### v0.3.0 Goals (Current Focus)
+### v0.3.0 Progress (Current Focus)
 
-1. **Unified Client SDK** (`client/`) - Single import for agent-side authentication
-2. **Unified Server SDK** (`server/`) - Composable server with AP + PS + AS roles
-3. **Unified Verifier** (`verifier/`) - Multi-protocol token verification for resources
-4. **Agent Provider Role** - AAuth agent registration and token issuance
+| Component | Status |
+|-----------|--------|
+| Unified Client (`client/unified.go`) | ✓ Complete |
+| Multi-protocol Verifier (`verifier/`) | ✓ Complete |
+| Agent Provider (`server/agentprovider/`) | ✓ Complete |
+| Store types & interface (`store/types.go`, `store/interface.go`) | ✓ Complete |
+| SQLite AgentProviderStorer (`store/sqlite_agentprovider.go`) | ✓ Complete |
+| Agent Provider tests | ✓ Complete |
+| Update `cmd/agentauth-server` with `--ap` flag | Pending |
+| Integration tests | Pending |
+| Documentation updates | Pending |
 
-See [Phase 7](#phase-7-unified-sdk-v030) for full details.
+### v0.4.0 Goals (Next)
+
+1. **Person Server refactor** - Clean separation in `server/personserver/`
+2. **Access Server refactor** - Clean separation in `server/accessserver/`
+3. **Audit Service** - Comprehensive logging for compliance
+4. **SCIM Agent Resource** - `/scim/v2/Agents` endpoints
+5. **Policy Service** - Cedar policy engine with AuthZEN API
+6. **Protected Resource example** - Demo service showing full flow
+
+See [Phase 8](#phase-8-enterprise-server-architecture-v040) for full details.
 
 ---
 
@@ -1072,11 +1089,281 @@ srv.RegisterHandlers(mux)
 
 ---
 
+## Phase 8: Enterprise Server Architecture (v0.4.0)
+
+Based on the July 2026 identity stack analysis, this phase expands the server architecture to support enterprise deployments with full lifecycle management, fine-grained authorization, and audit capabilities.
+
+### 8.1 July 2026 Identity Stack
+
+The foundational identity architecture for enterprise AI agents:
+
+```
+Identity Lifecycle
+-------------------
+SCIM Agent Resource
+
+↓
+
+Workload Identity
+-------------------
+WIMSE
+    (SPIFFE today)
+
+↓
+
+Agent Identity
+-------------------
+AAuth
+
+↓
+
+Human Delegation
+-------------------
+OAuth
+ID-JAG
+
+↓
+
+Resource Authorization
+-------------------
+OAuth
+AuthZEN
+(Cedar/OpenFGA)
+```
+
+### 8.2 Composable Server Architecture
+
+One server binary with composable logical roles:
+
+```
+agent-auth-server
+├── Agent Provider        # Agent registration, identity, token issuance
+├── Person Server         # Human consent, approval, mission authorization
+├── Access Server         # Resource-specific access decisions/tokens
+├── SCIM Agent Registry   # Agent lifecycle, ownership, provisioning
+├── Policy Service        # Cedar/OpenFGA via AuthZEN API
+├── Token Service         # JWT/AAuth/OAuth token issuance
+├── Key/JWKS Service      # Signing keys and discovery
+└── Audit Service         # Comprehensive logging
+```
+
+| Role | Purpose |
+|------|---------|
+| **Agent Provider** | Registers agents, manages agent identity, publishes metadata, issues agent tokens |
+| **Person Server** | Represents the human; handles consent, approval, mission authorization, interaction, audit |
+| **Access Server** | Issues resource-specific access decisions/tokens; integrates with protected resources |
+| **SCIM Agent Registry** | Stores/provisions agent lifecycle, owner, status, risk, entitlements |
+| **Policy Service** | Evaluates permissions using Cedar and/or OpenFGA, exposed through AuthZEN |
+| **Token Service** | Issues/verifies JWTs, AAuth tokens, OAuth-style access tokens |
+| **Key/JWKS Service** | Manages signing keys and public key discovery |
+| **Audit Service** | Logs human + agent + workload + mission + resource + decision |
+
+### 8.3 SCIM Agent Resource Integration
+
+SCIM in Agent Provider for demo/prototype, with path to enterprise IGA/IdP:
+
+```
+POST /scim/v2/Agents
+GET  /scim/v2/Agents/{id}
+PATCH /scim/v2/Agents/{id}
+DELETE /scim/v2/Agents/{id}
+
+GET  /.well-known/aauth-agent-provider
+POST /agents
+GET  /agents/{id}
+POST /token
+GET  /.well-known/jwks.json
+```
+
+**Deployment Modes:**
+
+| Mode | SCIM Lives In | Agent Provider Role |
+|------|--------------|---------------------|
+| **Demo/prototype** | Same Agent Provider server | System of record + token issuer |
+| **Enterprise production** | IGA / IdP / SCIM platform | Consumes approved agent records, issues runtime tokens |
+| **Hybrid** | Agent Provider exposes SCIM but syncs with IGA | Local runtime registry + enterprise governance |
+
+### 8.4 Policy Service (Cedar + AuthZEN)
+
+Fine-grained authorization using Cedar as the primary policy engine:
+
+```
+Agent
+   │
+   │ AAuth
+   ▼
+Resource (PEP)
+   │
+   │ AuthZEN API
+   ▼
+Policy Decision Point
+   │
+   │ Cedar + OpenFGA
+   ▼
+ALLOW / DENY
+```
+
+**Why Cedar over OPA:**
+
+- Schema-based validation
+- Static policy validation and type checking
+- Formal semantics with Lean verification
+- Authorization-specific language
+- Deterministic evaluation
+
+**Cedar + OpenFGA Combination:**
+
+```
+AuthZEN API
+      │
+      ▼
+Authorization Service
+      │
+      ├──────────────┐
+      │              │
+      ▼              ▼
+   Cedar         OpenFGA
+Policies      Relationships
+```
+
+Cedar answers: "Does this request satisfy these policies?"
+OpenFGA answers: "What relationships exist?"
+
+### 8.5 Package Structure
+
+```
+plexusone/agentauth/
+├── cmd/
+│   └── agentauth-server/     # Combined server binary
+├── server/
+│   ├── agentprovider/        # Agent Provider (AP) role ✓ (v0.3.0)
+│   ├── personserver/         # Person Server (PS) role
+│   ├── accessserver/         # Access Server (AS) role
+│   ├── scim/                  # SCIM Agent Registry (NEW)
+│   │   ├── handler.go
+│   │   └── resource.go
+│   ├── policy/                # Policy Service (NEW)
+│   │   ├── authzen.go         # AuthZEN API handlers
+│   │   ├── cedar.go           # Cedar policy evaluator
+│   │   └── openfga.go         # OpenFGA relationship checker
+│   └── audit/                 # Audit Service (NEW)
+│       ├── logger.go
+│       └── events.go
+├── store/                     # Extended for all roles
+│   ├── interface.go
+│   ├── sqlite.go
+│   ├── sqlite_agentprovider.go  ✓ (v0.3.0)
+│   ├── sqlite_scim.go           (NEW)
+│   └── sqlite_audit.go          (NEW)
+├── client/                    # Unified client ✓ (v0.3.0)
+├── verifier/                  # Multi-protocol verifier ✓ (v0.3.0)
+├── identity/                  # Identity composition
+└── docs/
+```
+
+### 8.6 Implementation Phases
+
+#### Phase 8a: Core Roles (v0.4.0-alpha)
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| Review/enhance Person Server | High | Clean separation in `server/personserver/` |
+| Review/enhance Access Server | High | Clean separation in `server/accessserver/` |
+| Add Audit Service | Medium | Comprehensive logging for compliance |
+| Add Protected Resource example | High | Demo service to show full flow |
+
+#### Phase 8b: SCIM Integration (v0.4.0-beta)
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| Implement SCIM Agent Resource | Medium | `/scim/v2/Agents` endpoints |
+| Add SCIM store operations | Medium | Store interface extensions |
+| Sync with Agent Provider | Medium | Unified agent model |
+
+#### Phase 8c: Policy Engine (v0.4.0-rc)
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| Add AuthZEN API | Medium | Standard authorization API |
+| Integrate Cedar | Medium | Policy evaluation engine |
+| Optional OpenFGA | Low | Relationship-based authorization |
+
+### 8.7 Server Deployment Flags
+
+```bash
+# Full identity provider (all roles)
+agentauth-server
+
+# AAuth-focused (AP + PS)
+agentauth-server --ap --ps
+
+# ID-JAG-focused (AS)
+agentauth-server --as
+
+# Individual roles
+agentauth-server --ap-only     # Agent Provider only
+agentauth-server --ps-only     # Person Server only
+agentauth-server --as-only     # Access Server only
+agentauth-server --scim        # Enable SCIM endpoints
+agentauth-server --audit       # Enable audit logging
+agentauth-server --cedar       # Enable Cedar policy engine
+```
+
+### 8.8 Full Request Flow
+
+```
+1. Agent provisioned via SCIM
+   POST /scim/v2/Agents
+
+2. Agent registers with Agent Provider
+   POST /agents (public key, metadata)
+
+3. Agent requests mission authorization
+   POST /missions (scopes, duration, resource)
+
+4. Human approves mission (Person Server)
+   POST /missions/{id}/approve
+
+5. Agent requests access token
+   POST /token (AAuth or ID-JAG flow)
+
+6. Agent accesses resource
+   GET /api/resource (Bearer token)
+
+7. Resource checks authorization
+   POST /authzen/access/v1/evaluation
+
+8. Cedar evaluates policy
+   ALLOW / DENY
+
+9. All actions logged to Audit Service
+```
+
+### 8.9 Deliverables
+
+| Task | Priority | Status |
+|------|----------|--------|
+| Agent Provider | High | ✓ Complete (v0.3.0) |
+| SQLite AgentProviderStorer | High | ✓ Complete (v0.3.0) |
+| Multi-protocol Verifier | High | ✓ Complete (v0.3.0) |
+| Unified Client | High | ✓ Complete (v0.3.0) |
+| Person Server refactor | High | Pending |
+| Access Server refactor | High | Pending |
+| Protected Resource example | High | Pending |
+| Audit Service | Medium | Pending |
+| SCIM Agent Resource | Medium | Pending |
+| Policy Service (Cedar) | Low | Pending |
+| AuthZEN API | Low | Pending |
+
+---
+
 ## Open Questions
 
 1. Should `bridge/` stay in agent-protocols or move to oaiaf?
 2. Should lambda deployments stay with agentauth or move to separate repo?
 3. Naming: Is "oaiaf" the right name? Alternatives: agent-arch, oaia, agentix
+4. Should Cedar policies be embedded or loaded from files/database?
+5. SCIM in Agent Provider vs separate service for enterprise?
 
 ---
 
