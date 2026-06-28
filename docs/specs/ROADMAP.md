@@ -2,6 +2,26 @@
 
 This document outlines the comprehensive plan for restructuring agent authentication and authorization across five repositories, based on the layered identity model where AAuth, ID-JAG, and SPIFFE operate at complementary layers rather than as alternatives.
 
+## Version Roadmap
+
+| Version | Status | Focus |
+|---------|--------|-------|
+| **v0.1.0** | Released | Initial release with PersonServer + AuthzServer |
+| **v0.2.0** | Released | Orchestration layer moved from agent-protocols, storage adapters |
+| **v0.3.0** | **Planned** | Unified SDK: `client/`, `server/`, `verifier/` packages + Agent Provider role |
+| v0.4.0 | Future | Production hardening, Ent ORM, advanced policy engine |
+
+### v0.3.0 Goals (Current Focus)
+
+1. **Unified Client SDK** (`client/`) - Single import for agent-side authentication
+2. **Unified Server SDK** (`server/`) - Composable server with AP + PS + AS roles
+3. **Unified Verifier** (`verifier/`) - Multi-protocol token verification for resources
+4. **Agent Provider Role** - AAuth agent registration and token issuance
+
+See [Phase 7](#phase-7-unified-sdk-v030) for full details.
+
+---
+
 ## Executive Summary
 
 ### Key Insight
@@ -748,6 +768,307 @@ Additional documentation and migration guides.
 | API reference for interface packages | agent-protocols | Pending | Document aauth/personserver and idjag/authzserver |
 | Migration guide | agent-protocols | Pending | Guide from old to new packages |
 | Integration guide | plexusone/agentauth | Pending | How to integrate with existing apps |
+
+---
+
+## Phase 7: Unified SDK (v0.3.0)
+
+### 7.1 Motivation
+
+The current architecture splits implementations across repos:
+
+- **agent-protocols/** has protocol types + reference server implementations
+- **agentauth/** has orchestration + storage + combined server
+
+This creates friction for consumers like omniagent/ and agent-team-stats/ who must import multiple packages and understand the layering.
+
+**Goal:** Make agentauth the **single integration point** for all agent authentication protocols.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        plexusone/agentauth                               │
+│                      (Production-Ready SDK)                              │
+│                                                                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │   client/   │  │   server/   │  │  verifier/  │  │    store/   │    │
+│  │             │  │             │  │             │  │             │    │
+│  │ Unified API │  │ AP + PS +AS │  │ Multi-proto │  │ SQLite/Dyn  │    │
+│  │ for agents  │  │ combined    │  │ validation  │  │             │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │ imports
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     aistandardsio/agent-protocols                        │
+│                     (Protocol Specs + Types)                             │
+│                                                                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │   aauth/    │  │   idjag/    │  │    aims/    │  │  scimext/   │    │
+│  │   types     │  │   types     │  │   types     │  │   types     │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Package Structure
+
+```
+plexusone/agentauth/
+├── client/                        # Unified client SDK
+│   ├── client.go                  # Single Client type
+│   ├── options.go                 # Configuration options
+│   ├── transport.go               # HTTP transport with signatures
+│   └── client_test.go
+├── server/                        # Unified server SDK
+│   ├── server.go                  # Combined server builder
+│   ├── agentprovider/             # Agent Provider (AP) role
+│   │   ├── provider.go            # AP implementation
+│   │   ├── handlers.go            # HTTP handlers
+│   │   ├── registration.go        # Agent registration
+│   │   └── metadata.go            # /.well-known/aauth-agent
+│   ├── personserver/              # Person Server (PS) role
+│   │   ├── server.go              # Wraps agent-protocols impl
+│   │   └── adapter.go             # Store adapter
+│   └── authzserver/               # Authorization Server (AS) role
+│       ├── server.go              # Wraps agent-protocols impl
+│       └── adapter.go             # Store adapter
+├── verifier/                      # Unified token verification
+│   ├── verifier.go                # Multi-protocol verifier
+│   ├── aauth.go                   # AAuth token verification
+│   ├── idjag.go                   # ID-JAG token verification
+│   ├── jwks.go                    # JWKS fetching/caching
+│   └── verifier_test.go
+├── store/                         # Storage backends (existing)
+│   ├── interface.go               # Extended for AP operations
+│   ├── sqlite.go
+│   ├── dynamodb.go
+│   └── agentprovider_adapter.go   # NEW: AP store adapter
+├── identity/                      # Identity composition (existing)
+├── cmd/agentauth-server/          # CLI binary
+├── lambda/                        # AWS Lambda deployment
+└── docs/
+```
+
+### 7.3 Unified Client API
+
+Single import, unified API for all protocols:
+
+```go
+import "github.com/plexusone/agentauth/client"
+
+// Create client with policy-based routing
+c, err := client.New(
+    client.WithAgentID("aauth:my-agent@example.com"),
+    client.WithPrivateKey(key),
+    client.WithPersonServer("https://ps.example.com"),
+    client.WithPolicy(client.PolicyConfig{
+        Default: client.ProtocolIDJAG,
+        AAuthScopes: []string{"write:*", "admin:*", "delete:*"},
+    }),
+)
+
+// Unified authorization - routes to correct protocol automatically
+token, err := c.Authorize(ctx, &client.AuthRequest{
+    Scopes:   []string{"read:stats"},
+    Resource: "https://api.example.com",
+})
+
+// HTTP client with automatic token attachment
+httpClient := c.HTTPClient()
+resp, err := httpClient.Get("https://api.example.com/data")
+```
+
+### 7.4 Unified Server API
+
+Single server combining all roles:
+
+```go
+import "github.com/plexusone/agentauth/server"
+
+// Create combined server with selected roles
+srv, err := server.New(
+    server.WithIssuer("https://auth.example.com"),
+    server.WithSigningKey(key, "key-1"),
+    server.WithStore(sqliteStore),
+
+    // Enable roles (default: all enabled)
+    server.WithAgentProvider(),   // AP role
+    server.WithPersonServer(),    // PS role
+    server.WithAuthzServer(),     // AS role
+)
+
+// Register all handlers
+srv.RegisterHandlers(mux)
+
+// Or run standalone
+srv.ListenAndServe(":8080")
+```
+
+Deployment flexibility via flags:
+
+```bash
+# Full identity provider (AP + PS + AS)
+agentauth-server
+
+# AAuth only (AP + PS)
+agentauth-server --aauth-only
+
+# ID-JAG only (AS)
+agentauth-server --idjag-only
+
+# Individual roles
+agentauth-server --ap-only
+agentauth-server --ps-only
+agentauth-server --as-only
+```
+
+### 7.5 Unified Verifier API
+
+For resource servers (like omniagent):
+
+```go
+import "github.com/plexusone/agentauth/verifier"
+
+// Create multi-protocol verifier
+v, err := verifier.New(
+    verifier.WithTrustedIssuers("https://ps.example.com", "https://as.example.com"),
+    verifier.WithProtocols(verifier.AAuth, verifier.IDJAG),
+    verifier.WithJWKSCache(time.Hour),
+)
+
+// Verify token (auto-detects protocol)
+claims, err := v.Verify(ctx, tokenString)
+// claims.Protocol = "aauth" or "idjag"
+// claims.Subject, claims.Issuer, claims.Scopes, etc.
+
+// HTTP middleware
+mux.Handle("/api/", v.Middleware(protectedHandler))
+```
+
+### 7.6 Store Extensions for Agent Provider
+
+New operations in `store/interface.go`:
+
+```go
+// Agent Provider operations
+RegisterAgent(ctx context.Context, agent *RegisteredAgent) error
+GetRegisteredAgent(ctx context.Context, agentID string) (*RegisteredAgent, error)
+UpdateAgent(ctx context.Context, agent *RegisteredAgent) error
+RevokeAgent(ctx context.Context, agentID string) error
+ListRegisteredAgents(ctx context.Context, ownerID string) ([]*RegisteredAgent, error)
+
+// Agent key operations
+CreateAgentKey(ctx context.Context, key *AgentKey) error
+GetAgentKey(ctx context.Context, agentID, keyID string) (*AgentKey, error)
+ListAgentKeys(ctx context.Context, agentID string) ([]*AgentKey, error)
+RevokeAgentKey(ctx context.Context, agentID, keyID string) error
+
+// Agent token operations
+CreateAgentToken(ctx context.Context, token *AgentToken) error
+GetAgentToken(ctx context.Context, jti string) (*AgentToken, error)
+RevokeAgentToken(ctx context.Context, jti string) error
+```
+
+New types:
+
+```go
+type RegisteredAgent struct {
+    ID          string            `json:"id"`           // aauth:name@domain
+    Name        string            `json:"name"`
+    Description string            `json:"description"`
+    OwnerID     string            `json:"owner_id"`     // User who owns this agent
+    Metadata    map[string]string `json:"metadata"`
+    CreatedAt   time.Time         `json:"created_at"`
+    RevokedAt   *time.Time        `json:"revoked_at,omitempty"`
+}
+
+type AgentKey struct {
+    ID        string     `json:"id"`         // Key ID (kid)
+    AgentID   string     `json:"agent_id"`
+    PublicKey string     `json:"public_key"` // JWK format
+    Algorithm string     `json:"algorithm"`  // ES256, EdDSA, etc.
+    CreatedAt time.Time  `json:"created_at"`
+    ExpiresAt *time.Time `json:"expires_at,omitempty"`
+    RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+```
+
+### 7.7 Integration with omniagent
+
+Before (current):
+
+```go
+import (
+    "github.com/aistandardsio/agent-protocols/aauth"
+    "github.com/aistandardsio/agent-protocols/idjag"
+    "github.com/plexusone/agentauth"
+)
+
+// Multiple verifiers, manual routing
+aAuthVerifier := aauth.NewVerifier(...)
+idJAGVerifier := idjag.NewVerifier(...)
+hybridProvider := agentauth.NewHybridProvider(...)
+```
+
+After (v0.3.0):
+
+```go
+import "github.com/plexusone/agentauth/verifier"
+
+// Single verifier handles all protocols
+v, _ := verifier.New(
+    verifier.WithTrustedIssuers("https://auth.example.com"),
+)
+
+// In HTTP handler
+func (s *Server) authenticate(r *http.Request) (*verifier.Claims, error) {
+    token := extractBearerToken(r)
+    return s.verifier.Verify(r.Context(), token)
+}
+```
+
+### 7.8 Deliverables
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| Create `client/` package | High | Unified client SDK wrapping existing providers |
+| Create `verifier/` package | High | Multi-protocol token verification |
+| Create `server/agentprovider/` | Medium | Agent Provider role implementation |
+| Extend `store/interface.go` | Medium | Add AP operations |
+| Update `cmd/agentauth-server` | Medium | Add `--ap` flag and AP endpoints |
+| Create migration guide | High | Document upgrade path from v0.2.0 |
+| Update omniagent integration | High | Switch to unified verifier |
+
+### 7.9 Migration Path
+
+```go
+// v0.2.0 (current)
+import "github.com/plexusone/agentauth"
+
+provider := agentauth.NewHybridProvider(config)
+result, err := provider.Authorize(ctx, req)
+
+// v0.3.0 (unified)
+import "github.com/plexusone/agentauth/client"
+
+c, err := client.New(client.WithConfig(config))
+result, err := c.Authorize(ctx, req)
+```
+
+Server migration:
+
+```go
+// v0.2.0 (current)
+// Manual setup of personserver + authzserver
+
+// v0.3.0 (unified)
+import "github.com/plexusone/agentauth/server"
+
+srv, err := server.New(
+    server.WithStore(store),
+    server.WithSigningKey(key, kid),
+)
+srv.RegisterHandlers(mux)
+```
 
 ---
 
