@@ -305,6 +305,10 @@ Links all three identity layers with a unique binding:
 - [agent-protocols](https://github.com/aistandardsio/agent-protocols) - Pure protocol implementations
 - [agent-standards-catalog](https://github.com/aistandardsio/agent-standards-catalog) - Standards catalog
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 MIT License
