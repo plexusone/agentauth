@@ -5,6 +5,10 @@
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
+         <loc>https://plexusone.github.io/agentauth/agentauth/agent-provider/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
          <loc>https://plexusone.github.io/agentauth/agentauth/api-reference/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
@@ -58,6 +62,14 @@
     </url>
     <url>
          <loc>https://plexusone.github.io/agentauth/releases/v0.2.0/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/releases/v0.3.0/</loc>
+         <lastmod>2026-06-28</lastmod>
+    </url>
+    <url>
+         <loc>https://plexusone.github.io/agentauth/specs/PLAN/</loc>
          <lastmod>2026-06-28</lastmod>
     </url>
     <url>
