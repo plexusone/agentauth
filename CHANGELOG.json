@@ -1,0 +1,68 @@
+{
+  "irVersion": "1.0",
+  "project": "agentauth",
+  "repository": "https://github.com/plexusone/agentauth",
+  "versioning": "semver",
+  "commitConvention": "conventional",
+  "maintainers": ["grokify", "johncwang@gmail.com"],
+  "releases": [
+    {
+      "version": "v0.2.0",
+      "date": "2026-06-27",
+      "commit": "7699521",
+      "highlights": [
+        { "description": "Orchestration layer moved from agent-protocols for multi-protocol coordination" },
+        { "description": "Client SDK for agents to authenticate via ID-JAG and AAuth flows" },
+        { "description": "Comprehensive MkDocs documentation for all components" }
+      ],
+      "added": [
+        { "description": "Orchestration layer from agent-protocols: `HybridProvider`, `TokenVerifier`, `PolicyMatcher`", "commit": "a9f2ea2" },
+        { "description": "SDK client for agents with ID-JAG token exchange (RFC 8693) and AAuth consent flow", "commit": "bc12eb3" },
+        { "description": "Orchestration unit tests for verifier and policy matcher", "commit": "9b78801" },
+        { "description": "MkDocs documentation for orchestration layer (verifier, hybrid, policy)", "commit": "411e363" },
+        { "description": "MkDocs documentation for client SDK (getting-started, token-exchange, consent-flow)", "commit": "db99da4" }
+      ],
+      "changed": [
+        { "description": "README updated with orchestration layer documentation", "commit": "370f217" },
+        { "description": "MkDocs navigation updated for orchestration and client sections", "commit": "d23317e" }
+      ],
+      "dependencies": [
+        { "description": "Update `agent-protocols` to v0.6.1 (orchestration layer moved out)", "commit": "7699521" }
+      ]
+    },
+    {
+      "version": "v0.1.0",
+      "date": "2026-06-27",
+      "commit": "9a36d76",
+      "highlights": [
+        { "description": "Layered identity composition combining AAuth, ID-JAG, and SPIFFE protocols" },
+        { "description": "SQLite and DynamoDB storage backends with server adapters" },
+        { "description": "MkDocs documentation site with PlexusOne theme" }
+      ],
+      "added": [
+        { "description": "Layered identity composition: `ComposedIdentity`, `HumanIdentity`, `AgentIdentity`, `WorkloadIdentity`", "commit": "c5e9abe" },
+        { "description": "Identity composer for linking protocol identities with binding", "commit": "c5e9abe" },
+        { "description": "Composition layer types from agent-protocols", "commit": "fd353ca" },
+        { "description": "`PersonServerAdapter` for aauth/personserver integration", "commit": "fd353ca" },
+        { "description": "`AuthzServerAdapter` for idjag/authzserver integration", "commit": "a262c4b" },
+        { "description": "SQLite storage backend", "commit": "c7893ef" },
+        { "description": "DynamoDB storage backend", "commit": "62f9b7e" },
+        { "description": "Storage adapter unit tests", "commit": "06b9c57" },
+        { "description": "MkDocs site with Material theme and PlexusOne navigation", "commit": "3c0506b" },
+        { "description": "Identity and storage documentation", "commit": "d0d8848" },
+        { "description": "v0.1.0 release notes", "commit": "9a27a7b" },
+        { "description": "PlexusOne theme with unified navigation", "commit": "9a36d76" },
+        { "description": "GitHub Actions CI workflows", "commit": "f9550d1" }
+      ],
+      "fixed": [
+        { "description": "Unused parameter lint error in `calculateExpiration`", "commit": "67580b1" },
+        { "description": "Store interface compatibility", "commit": "4ac4627" }
+      ],
+      "documentation": [
+        { "description": "README with architecture diagram and usage examples", "commit": "b7fc326" },
+        { "description": "ROADMAP with Phase 6 progress", "commit": "f1f27f4" },
+        { "description": "AgentAuth documentation", "commit": "52c441b" }
+      ]
+    }
+  ]
+}
