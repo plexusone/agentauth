@@ -42,6 +42,12 @@ AgentAuth provides a composition layer for AI agent authentication that properly
 
 These protocols operate at **different layers** and should be **composed**, not chosen between.
 
+### v0.3.0 Features
+
+- **Unified Client SDK** - Single interface for multi-protocol authentication with policy-based routing
+- **Unified Verifier** - Multi-protocol token verification with automatic protocol detection and JWKS caching
+- **Agent Provider** - Server-side agent registration, key management, and token issuance
+
 ## Architecture
 
 ```
@@ -139,36 +145,41 @@ mission := &store.Mission{
 err = db.CreateMission(ctx, mission)
 ```
 
-### Token Verification (Server-Side)
+### Unified Token Verification (v0.3.0)
 
-The `TokenVerifier` provides multi-protocol token verification with action-based routing:
+The `verifier` package provides multi-protocol token verification with automatic protocol detection:
 
 ```go
-import "github.com/plexusone/agentauth"
+import "github.com/plexusone/agentauth/verifier"
 
-// Configure token verification
-config := &agentauth.VerifierConfig{
-    IDJAGEnabled: true,
-    AAuthEnabled: true,
-    IDJAGIssuers: map[string]string{
-        "https://issuer.example.com": "", // Auto-discovers JWKS
-    },
-    AAuthIssuers: map[string]string{
-        "https://consent.example.com": "",
-    },
-    SensitiveActions: []string{"write", "delete", "admin"},
-}
+// Create verifier with trusted issuers
+v, _ := verifier.New(
+    verifier.WithTrustedIssuers(
+        "https://auth.example.com",
+        "https://consent.example.com",
+    ),
+    verifier.WithProtocols(verifier.ProtocolAAuth, verifier.ProtocolIDJAG),
+    verifier.WithJWKSCache(time.Hour),
+)
 
-verifier := agentauth.NewTokenVerifier(config)
-
-// Verify token (tries both protocols)
-claims, err := verifier.Verify(ctx, token)
-
-// Verify with action checking (requires AAuth for sensitive actions)
-claims, err := verifier.VerifyForAction(ctx, token, "delete:resource")
+// Verify any token (auto-detects protocol)
+claims, err := v.Verify(ctx, tokenString)
 if err != nil {
-    // Returns error if action requires AAuth but token is ID-JAG
+    return err
 }
+
+fmt.Printf("Protocol: %s\n", claims.Protocol)   // "aauth" or "idjag"
+fmt.Printf("Token Type: %s\n", claims.TokenType) // "aa-agent+jwt", "aa-auth+jwt", etc.
+fmt.Printf("Subject: %s\n", claims.Subject)
+fmt.Printf("Scopes: %v\n", claims.Scopes)
+```
+
+Use HTTP middleware for protected resources:
+
+```go
+// Apply to protected routes
+mux.Handle("/api/", v.Middleware(apiHandler))
+mux.Handle("/api/admin/", v.RequireScopes("admin:*")(adminHandler))
 ```
 
 ### Hybrid Provider (Protocol Routing)
@@ -208,9 +219,52 @@ result, err := provider.Authorize(ctx, &agentauth.AuthRequest{
 })
 ```
 
-### Agent SDK Client
+### Unified Client SDK (v0.3.0)
 
-The `client` package provides an SDK for agents to authenticate:
+The `UnifiedClient` provides a single interface for multi-protocol authentication with policy-based routing:
+
+```go
+import "github.com/plexusone/agentauth/client"
+
+// Create unified client
+c, _ := client.NewUnified(
+    client.WithAgentID("aauth:my-agent@example.com"),
+    client.WithPrivateKey(privateKey, "key-1"),
+    client.WithPersonServer("https://consent.example.com"),
+    client.WithTokenEndpoint("https://auth.example.com/token"),
+    client.WithPolicy(client.PolicyConfig{
+        Default:     client.ProtocolIDJAG,                      // Default to automated
+        AAuthScopes: []string{"write:*", "delete:*", "admin:*"}, // These require consent
+    }),
+    client.WithCaching(100),
+)
+
+// Request authorization - protocol selected automatically based on scopes
+result, err := c.Authorize(ctx, &client.AuthRequest{
+    Resource: "https://api.example.com",
+    Scopes:   []string{"read:email"},  // Routes to ID-JAG (automated)
+})
+
+result, err := c.Authorize(ctx, &client.AuthRequest{
+    Resource:    "https://api.example.com",
+    Scopes:      []string{"write:profile"}, // Routes to AAuth (requires consent)
+    MissionName: "Update User Profile",
+})
+
+if result.IsPending() {
+    fmt.Println("Please approve at:", result.ConsentURI)
+}
+
+// Get an HTTP client with automatic authorization
+httpClient := c.HTTPClient(&client.AuthRequest{
+    Scopes: []string{"read:data"},
+})
+resp, _ := httpClient.Get("https://api.example.com/data")
+```
+
+### Legacy Client
+
+The original client is still available for direct protocol usage:
 
 ```go
 import "github.com/plexusone/agentauth/client"
@@ -223,9 +277,6 @@ c := client.New("https://authz.example.com",
 // ID-JAG token exchange (RFC 8693 - automated)
 token, err := c.ExchangeIDJAG(ctx, idjagAssertion, "read:email read:profile")
 
-// JWT bearer grant (RFC 7523)
-token, err := c.ExchangeJWTBearer(ctx, jwtAssertion, "read:data")
-
 // AAuth flow (human consent required)
 result, err := c.RequestAuthorization(ctx, &client.AuthorizationRequest{
     AgentToken:  agentToken,
@@ -233,37 +284,73 @@ result, err := c.RequestAuthorization(ctx, &client.AuthorizationRequest{
     Scopes:      "write:profile",
     MissionName: "Update User Profile",
 })
+```
 
-if result.Status == "pending" {
-    // Direct user to result.ConsentURI for approval
-    fmt.Println("Please approve at:", result.ConsentURI)
+### Agent Provider (v0.3.0)
 
-    // Wait for consent (blocks until approved/denied/timeout)
-    token, err := c.WaitForConsent(ctx, result.StatusURI)
-}
+The `server/agentprovider` package implements the AAuth Agent Provider role:
+
+```go
+import "github.com/plexusone/agentauth/server/agentprovider"
+
+// Create Agent Provider
+provider, _ := agentprovider.New(
+    agentStore,
+    "https://auth.example.com",
+    signingKey,
+    "key-1",
+    agentprovider.WithTokenTTL(time.Hour),
+    agentprovider.WithLogger(logger),
+)
+
+// Register HTTP handlers
+mux := http.NewServeMux()
+provider.RegisterHandlers(mux)
+// Endpoints:
+// GET  /.well-known/aauth-agent-provider - Discovery metadata
+// GET  /.well-known/jwks.json            - Public keys
+// POST /agents                           - Register new agent
+// GET  /agents/{id}                      - Get agent info
+// DELETE /agents/{id}                    - Revoke agent
+// POST /agents/{id}/keys                 - Add key to agent
+// POST /token                            - Issue agent token
+
+http.ListenAndServe(":8080", mux)
 ```
 
 ## Package Structure
 
 ```
 plexusone/agentauth/
-├── identity/          # Layered identity composition
-│   ├── types.go       # ComposedIdentity, HumanIdentity, AgentIdentity, WorkloadIdentity
-│   └── composer.go    # Identity composer
-├── store/             # Storage abstractions
-│   ├── interface.go   # Storer interface
-│   ├── types.go       # User, Agent, Mission, Token, etc.
-│   └── sqlite.go      # SQLite implementation
-├── client/            # Agent SDK for authentication
-│   └── client.go      # Token exchange, consent flow
-├── verifier.go        # Multi-protocol token verifier
-├── hybrid.go          # HybridProvider for protocol routing
-├── policy.go          # PolicyMatcher for scope-based routing
-├── cmd/               # Server binaries
-├── lambda/            # AWS Lambda handlers
+├── identity/              # Layered identity composition
+│   ├── types.go           # ComposedIdentity, HumanIdentity, AgentIdentity, WorkloadIdentity
+│   └── composer.go        # Identity composer
+├── store/                 # Storage abstractions
+│   ├── interface.go       # Storer, AgentProviderStorer interfaces
+│   ├── types.go           # User, Agent, Mission, Token, RegisteredAgent, etc.
+│   ├── sqlite.go          # SQLite core implementation
+│   └── sqlite_agentprovider.go  # SQLite Agent Provider implementation
+├── client/                # Agent SDK for authentication
+│   ├── client.go          # Legacy client (token exchange, consent flow)
+│   └── unified.go         # Unified multi-protocol client (v0.3.0)
+├── verifier/              # Multi-protocol token verification (v0.3.0)
+│   ├── verifier.go        # Unified verifier with auto protocol detection
+│   ├── middleware.go      # HTTP middleware
+│   └── jwk.go             # JWK parsing utilities
+├── server/                # Server-side components
+│   └── agentprovider/     # Agent Provider role (v0.3.0)
+│       ├── provider.go    # HTTP handlers
+│       └── token.go       # Token issuance
+├── verifier.go            # Legacy protocol router
+├── hybrid.go              # HybridProvider for protocol routing
+├── policy.go              # PolicyMatcher for scope-based routing
+├── cmd/                   # Server binaries
+│   └── agentauth-server/
+├── lambda/                # AWS Lambda handlers
 └── docs/
     └── specs/
-        └── ROADMAP.md # Implementation roadmap
+        ├── ROADMAP.md     # Implementation roadmap
+        └── PLAN.md        # Tactical implementation plan
 ```
 
 ## Key Concepts

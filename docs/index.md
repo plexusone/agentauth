@@ -96,19 +96,27 @@ if id, ok := identity.FromContext(ctx); ok {
 
 ```
 plexusone/agentauth/
-├── identity/          # Layered identity composition
-│   ├── types.go       # ComposedIdentity, HumanIdentity, AgentIdentity, WorkloadIdentity
-│   └── composer.go    # Identity composer
-├── store/             # Storage abstractions
-│   ├── interface.go   # Storer interface
-│   ├── types.go       # User, Agent, Mission, Token, etc.
-│   ├── sqlite.go      # SQLite implementation
-│   └── dynamodb.go    # DynamoDB implementation
-├── cmd/               # CLI tools
+├── identity/              # Layered identity composition
+│   ├── types.go           # ComposedIdentity, HumanIdentity, AgentIdentity, WorkloadIdentity
+│   └── composer.go        # Identity composer
+├── store/                 # Storage abstractions
+│   ├── interface.go       # Storer, AgentProviderStorer interfaces
+│   ├── types.go           # User, Agent, Mission, Token, etc.
+│   ├── sqlite.go          # SQLite implementation
+│   └── sqlite_agentprovider.go  # Agent Provider store (v0.3.0)
+├── client/                # Agent SDK
+│   ├── client.go          # Token exchange, consent flow
+│   └── unified.go         # Unified multi-protocol client (v0.3.0)
+├── verifier/              # Token verification (v0.3.0)
+│   ├── verifier.go        # Multi-protocol verifier
+│   └── middleware.go      # HTTP middleware
+├── server/                # Server components
+│   └── agentprovider/     # Agent Provider (v0.3.0)
+├── cmd/                   # CLI tools
 │   └── agentauth-server/
-├── lambda/            # AWS Lambda handlers
+├── lambda/                # AWS Lambda handlers
 │   └── peopleserver/
-└── examples/          # Example applications
+└── examples/              # Example applications
 ```
 
 ## Key Concepts
@@ -137,5 +145,7 @@ Links all three identity layers with a unique binding:
 
 - [AgentAuth Overview](agentauth/overview.md) - Unified authorization layer
 - [Getting Started](agentauth/getting-started.md) - Quick start guide
+- [Agent Provider](agentauth/agent-provider.md) - Agent registration and token issuance (v0.3.0)
 - [Deployment](agentauth/deployment.md) - AWS Lambda deployment
 - [API Reference](agentauth/api-reference.md) - Endpoint documentation
+- [Release Notes](releases/v0.3.0.md) - What's new in v0.3.0

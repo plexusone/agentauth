@@ -1,8 +1,72 @@
 # Token Verification
 
+AgentAuth provides two token verification options:
+
+1. **Unified Verifier (v0.3.0)** - The `verifier` package with automatic protocol detection and JWKS caching
+2. **TokenVerifier** - Action-based verification with sensitive operation policies
+
+## Unified Verifier (v0.3.0)
+
+The `verifier` package provides multi-protocol token verification with automatic protocol detection:
+
+```go
+import "github.com/plexusone/agentauth/verifier"
+
+v, _ := verifier.New(
+    verifier.WithTrustedIssuers(
+        "https://auth.example.com",
+        "https://consent.example.com",
+    ),
+    verifier.WithProtocols(verifier.ProtocolAAuth, verifier.ProtocolIDJAG),
+    verifier.WithJWKSCache(time.Hour),
+)
+
+// Verify any token (auto-detects protocol)
+claims, err := v.Verify(ctx, tokenString)
+if err != nil {
+    return err
+}
+
+fmt.Printf("Protocol: %s\n", claims.Protocol)    // "aauth" or "idjag"
+fmt.Printf("Token Type: %s\n", claims.TokenType) // "aa-agent+jwt", "aa-auth+jwt", "id-jag"
+fmt.Printf("Subject: %s\n", claims.Subject)
+fmt.Printf("Scopes: %v\n", claims.Scopes)
+fmt.Printf("Agent ID: %s\n", claims.AgentID)     // AAuth-specific
+fmt.Printf("Actor: %s\n", claims.Actor)          // ID-JAG delegation
+```
+
+### Unified Verifier Options
+
+| Option | Description |
+|--------|-------------|
+| `WithTrustedIssuers(...)` | Issuers whose tokens are accepted |
+| `WithProtocols(...)` | Protocols to accept (AAuth, ID-JAG) |
+| `WithJWKSCache(ttl)` | JWKS cache duration |
+| `WithHTTPClient(client)` | Custom HTTP client for JWKS fetching |
+
+### HTTP Middleware
+
+```go
+// Protect all routes under /api/
+mux.Handle("/api/", v.Middleware(apiHandler))
+
+// Require specific scopes
+mux.Handle("/api/admin/", v.RequireScopes("admin:*")(adminHandler))
+
+// Access claims in handler
+func apiHandler(w http.ResponseWriter, r *http.Request) {
+    claims := verifier.ClaimsFromContext(r.Context())
+    fmt.Printf("Request from: %s\n", claims.Subject)
+}
+```
+
+---
+
+## TokenVerifier (Action-Based)
+
 The `TokenVerifier` provides multi-protocol token verification with action-based routing for server-side validation.
 
-## Overview
+### Overview
 
 TokenVerifier can verify both ID-JAG and AAuth tokens automatically, determining the protocol from the token's issuer claim. It also enforces action-based policies, requiring AAuth (human consent) for sensitive operations.
 
