@@ -163,3 +163,81 @@ func JoinScopes(scopes []string) string {
 	}
 	return result
 }
+
+// ============================================================================
+// Agent Provider Types (AAuth Agent Identity)
+// ============================================================================
+
+// RegisteredAgent represents a fully registered agent with the Agent Provider.
+// This extends the basic Agent type with ownership and lifecycle information.
+type RegisteredAgent struct {
+	ID          string            `json:"id" db:"id"`     // AAuth ID (e.g., "aauth:name@domain")
+	Name        string            `json:"name" db:"name"` // Human-readable name
+	Description string            `json:"description,omitempty" db:"description"`
+	OwnerID     string            `json:"owner_id" db:"owner_id"`    // User who owns this agent
+	Issuer      string            `json:"issuer" db:"issuer"`        // Agent Provider issuer URL
+	Metadata    map[string]string `json:"metadata,omitempty" db:"-"` // Arbitrary metadata (JSON in DB)
+	MetadataRaw string            `json:"-" db:"metadata"`           // JSON serialized metadata
+	Status      AgentStatus       `json:"status" db:"status"`        // active, suspended, revoked
+	CreatedAt   time.Time         `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at" db:"updated_at"`
+	RevokedAt   *time.Time        `json:"revoked_at,omitempty" db:"revoked_at"`
+}
+
+// AgentStatus represents the status of a registered agent.
+type AgentStatus string
+
+// Agent statuses.
+const (
+	AgentStatusActive    AgentStatus = "active"
+	AgentStatusSuspended AgentStatus = "suspended"
+	AgentStatusRevoked   AgentStatus = "revoked"
+)
+
+// IsActive returns true if the agent is active.
+func (a *RegisteredAgent) IsActive() bool {
+	return a.Status == AgentStatusActive && a.RevokedAt == nil
+}
+
+// AgentKey represents a public key registered for an agent.
+type AgentKey struct {
+	ID        string     `json:"id" db:"id"` // Key ID (kid)
+	AgentID   string     `json:"agent_id" db:"agent_id"`
+	PublicKey string     `json:"public_key" db:"public_key"` // JWK format
+	Algorithm string     `json:"algorithm" db:"algorithm"`   // ES256, EdDSA, RS256, etc.
+	Use       string     `json:"use,omitempty" db:"use"`     // sig or enc
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty" db:"revoked_at"`
+}
+
+// IsValid returns true if the key is valid (not expired or revoked).
+func (k *AgentKey) IsValid() bool {
+	if k.RevokedAt != nil {
+		return false
+	}
+	if k.ExpiresAt != nil && time.Now().After(*k.ExpiresAt) {
+		return false
+	}
+	return true
+}
+
+// IssuedAgentToken represents an agent token issued by the Agent Provider.
+// This tracks issued tokens for auditing and revocation.
+type IssuedAgentToken struct {
+	JTI       string     `json:"jti" db:"jti"` // JWT ID
+	AgentID   string     `json:"agent_id" db:"agent_id"`
+	KeyID     string     `json:"key_id" db:"key_id"`     // Which key was used to sign
+	Audience  string     `json:"audience" db:"audience"` // Space-separated audience
+	IssuedAt  time.Time  `json:"issued_at" db:"issued_at"`
+	ExpiresAt time.Time  `json:"expires_at" db:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty" db:"revoked_at"`
+}
+
+// IsValid returns true if the token is valid.
+func (t *IssuedAgentToken) IsValid() bool {
+	if t.RevokedAt != nil {
+		return false
+	}
+	return time.Now().Before(t.ExpiresAt)
+}

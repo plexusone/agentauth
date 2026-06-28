@@ -56,3 +56,29 @@ type Storer interface {
 	ListScopePolicies(ctx context.Context) ([]*ScopePolicy, error)
 	DeleteScopePolicy(ctx context.Context, id string) error
 }
+
+// AgentProviderStorer extends Storer with Agent Provider operations.
+// Implementations should embed Storer and add these methods.
+type AgentProviderStorer interface {
+	Storer
+
+	// Registered agent operations
+	RegisterAgent(ctx context.Context, agent *RegisteredAgent) error
+	GetRegisteredAgent(ctx context.Context, agentID string) (*RegisteredAgent, error)
+	UpdateRegisteredAgent(ctx context.Context, agent *RegisteredAgent) error
+	RevokeRegisteredAgent(ctx context.Context, agentID string) error
+	ListRegisteredAgents(ctx context.Context, ownerID string) ([]*RegisteredAgent, error)
+	ListAllRegisteredAgents(ctx context.Context) ([]*RegisteredAgent, error)
+
+	// Agent key operations
+	CreateAgentKey(ctx context.Context, key *AgentKey) error
+	GetAgentKey(ctx context.Context, agentID, keyID string) (*AgentKey, error)
+	ListAgentKeys(ctx context.Context, agentID string) ([]*AgentKey, error)
+	RevokeAgentKey(ctx context.Context, agentID, keyID string) error
+
+	// Issued agent token operations (for tracking/revocation)
+	CreateIssuedAgentToken(ctx context.Context, token *IssuedAgentToken) error
+	GetIssuedAgentToken(ctx context.Context, jti string) (*IssuedAgentToken, error)
+	RevokeIssuedAgentToken(ctx context.Context, jti string) error
+	ListIssuedAgentTokens(ctx context.Context, agentID string) ([]*IssuedAgentToken, error)
+}
